@@ -1,0 +1,327 @@
+---
+title: "Videogiochi"
+author: "Francesca Lavia"
+output:
+  ioslides_presentation:
+    css: stile.css
+    incremental: yes
+date: "2023-09-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(grDevices)
+library(gridExtra)
+library(plotly)
+library(patchwork)
+```
+
+```{r include=FALSE}
+ps4=read.csv("dataset/PS4_GamesSales.csv")
+xbox=read.csv("dataset/XboxOne_GameSales.csv")
+popolari1=read.csv("dataset/all_games.csv")
+popolari2=read.csv("dataset/Raw Data.csv")
+```
+
+## [Situazione]{.underline}
+
+Possiedo un negozio di videogiochi e desidero capire quali videogiochi mi conviene acquistare.
+
+![](ps4_xbox.jpg)
+
+## [Domande]{.underline}
+
+1.  Quali sono i giochi più venduti per le due console?
+
+2.  Quali sono i giochi più popolari e che relazione hanno con i giochi più venduti?
+
+3.  Quali generi sono i più venduti?
+
+## [Dataset]{.underline}
+
+I dataset utilizzati sono i seguenti:
+
+-   <https://www.kaggle.com/datasets/sidtwr/videogames-sales-dataset?select=PS4_GamesSales.csv>
+
+-   <https://www.kaggle.com/datasets/sidtwr/videogames-sales-dataset?select=XboxOne_GameSales.csv>
+
+-   <https://www.kaggle.com/datasets/deepcontractor/top-video-games-19952021-metacritic>
+
+-   <https://www.kaggle.com/datasets/thedevastator/global-video-game-sales-ratings?select=Raw+Data.csv>
+
+```{r include=FALSE}
+varp = vector("character", nrow(ps4)) 
+for(x in 1:nrow(ps4)){
+  varp[x]="PlayStation 4"
+}
+varx = vector("character", nrow(xbox))
+for(y in 1:nrow(xbox)){
+  varx[y]="Xbox One"
+  }
+ps4=ps4 %>%
+  mutate(
+    Console=varp
+  )
+xbox=xbox %>%
+  mutate(
+    Console=varx
+  )
+both=full_join(ps4, xbox, by=join_by(Game, Year, Genre, Publisher, North.America, Europe, Japan, Rest.of.World, Global, Console))
+both=arrange(both, desc(Global))
+elenco = vector("integer", nrow(both)) 
+for(x in 1:nrow(both)){
+  elenco[x]=x
+}
+both=both %>%
+  mutate(
+    Vendite_Globali=Global,
+    Pos=elenco,
+    Genre = case_when(
+    Genre == "Shooter" ~ "Sparatutto",
+    Genre == "Action" ~ "Azione",
+    Genre == "Sports" ~ "Sport",
+    Genre == "Action-Adventure" ~ "Azione-Avventura",
+    Genre == "Role-Playing" ~ "Gioco di ruolo",
+    Genre == "Racing" ~ "Corsa",
+    Genre == "Fighting" ~ "Lotta",
+    Genre == "Misc" ~ "Varie",
+    Genre == "Adventure" ~ "Avventura",
+    Genre == "Music" ~ "Musica",
+    Genre == "Simulation" ~ "Simulazione",
+    Genre == "Strategy" ~ "Strategia",
+    TRUE ~ Genre
+  )
+  )
+
+popolari1=popolari1%>%
+  rename(
+    Console=platform,
+    Game=name
+  )
+popolari1=popolari1%>%
+  mutate(Console = ifelse(summary == ("From out of nowhere, a new enemy attacked. Major metropolitan areas were hit with a never-before-seen form of elemental warfare, plunged into darkness and chaos. In the aftermath, the Agency picked-up a hot lead -- and now they'll stop at nothing to find the ones who knocked us down, to deliver a harsh dose of Justice… by any means necessary."),
+                          "PC", Console))
+popolari1=popolari1%>%
+  mutate(Console = ifelse(Console %in% c(" PlayStation 4", " Xbox One"),
+                          ifelse(Console == " PlayStation 4", "PlayStation 4", "Xbox One"),
+                          Console))
+
+popolari2=popolari2%>%
+  rename(
+    Console=Platform,
+    Game=Name,
+    meta_score=Critic_Score,
+    user_review=User_Score
+  )
+popolari2=popolari2%>%
+  mutate(Console = ifelse(Console %in% c("PS4", " XOne"),
+                          ifelse(Console == "PS4", "PlayStation 4", "Xbox One"),
+                          Console))
+
+popolari=anti_join(popolari1 %>% select(Console, Game, meta_score, user_review), popolari2 %>% select(Console, Game, meta_score, user_review), by = join_by(Game, Console, meta_score, user_review))
+
+both=left_join(both, popolari1, by=join_by(Console, Game))
+both$user_review=as.numeric(both$user_review)
+```
+
+## [Quali sono i giochi più venduti?]{.underline}
+
+```{r echo=FALSE}
+ggplot(data= filter(both, Pos <= 10), aes(x=Pos, y=Vendite_Globali, fill=factor(Pos)))+
+  geom_bar(stat="identity")+
+  labs(x="", y="Vendite globali in milioni")+
+  scale_fill_discrete(name = "Giochi", labels = both$Game) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
+```
+
+```{r echo=FALSE}
+colori_console=c("PlayStation 4" = "#1e90ff", "Xbox One" = "#90ee90")
+
+ggplot(data= filter(both, Pos <= 10), aes(x=Pos, y=Vendite_Globali, fill=factor(Console)))+
+  geom_bar(stat="identity")+
+  labs(x="", y="Vendite globali in milioni")+
+  scale_fill_manual(values = colori_console, name = "Console")+
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
+```
+
+## [Quali sono i giochi più popolari e che relazione hanno con i giochi più venduti?]{.underline}
+
+```{r include=FALSE}
+pop=both %>%
+  filter(!is.na(meta_score))
+pop=arrange(pop, desc(meta_score))
+elenco = vector("integer", nrow(pop)) 
+for(x in 1:nrow(pop)){
+  elenco[x]=x
+}
+pop=pop %>%
+  mutate(
+    PosM=elenco
+  )
+for(i in 1:nrow(pop)){
+  if(pop$Console[i]=="PlayStation 4"){
+    pop$Game[i]=paste(pop$Game[i], "(Ps4)")
+  }else{
+    pop$Game[i]=paste(pop$Game[i], "(Xbox)")
+  }
+}
+pop=arrange(pop, desc(user_review))
+for(x in 1:nrow(pop)){
+  elenco[x]=x
+}
+pop=pop %>%
+  mutate(
+    PosU=elenco,
+    user_review=user_review*10
+  )
+pop=pop%>%
+  rename(
+    Giocatori=user_review,
+    Critica=meta_score
+  )
+```
+
+```{r echo=FALSE}
+color_palette = c("Critica" = "#f4a460", "Giocatori" = "#9370db")
+
+pop_long = pivot_longer(filter(pop, PosM <= 10), cols = c(Critica, Giocatori), names_to = "Tipo", values_to = "Punteggio")
+
+p <- ggplot(pop_long, aes(x = Punteggio, y = reorder(Game, desc(PosM)), fill = Tipo)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.75, color = "black") +
+  scale_fill_manual(values = color_palette, name = "Voti") +
+  coord_cartesian(xlim=c(60, NA)) +
+  labs(title = "Confronto Punteggio critica e videogiocatori",
+       x = "",
+       y = "",
+       fill = "Tipo") +
+  theme_minimal() +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 1),
+        panel.grid = element_blank())
+
+ggplotly(p, tooltip = "Punteggio")
+
+```
+
+```{r echo=FALSE}
+d=ggplot(filter(pop, PosM <= 20), aes(x = reorder(Game, desc(Critica)),y = Critica, group=all())) +
+  geom_point() +
+  geom_line(color = "orange") +
+  labs(title = "Confonto Valutazione e Vendite globali", x = "", y = "Valutazione Critica") +
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank())
+d=ggplotly(d, tooltip = "Critica")
+
+e=ggplot(filter(pop, PosM <= 20), aes(x = reorder(Game, desc(Critica)),y = Vendite_Globali, group=all())) +
+  geom_point() +
+  geom_line(color = "blue") +
+  labs(title = "Confonto Valutazione e Vendite globali", x = "", y = "Vendite globali in milioni") +
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank())
+e=ggplotly(e, tooltip = "Vendite_Globali")
+subplot(d, e, nrows = 2)
+```
+
+## [Quali generi sono i più venduti?]{.underline}
+
+```{r echo=FALSE}
+vendite=both %>%
+  group_by(Genre)%>%
+  summarise(Totale_Vendite = sum(Vendite_Globali))%>%
+  mutate(Percentuale = Totale_Vendite / sum(Totale_Vendite) * 100)
+
+vendite=arrange(vendite, desc(Percentuale))
+elenco = vector("integer", nrow(vendite)) 
+for(x in 1:nrow(vendite)){
+  elenco[x]=x
+}
+vendite=vendite %>%
+  mutate(
+    Pos=elenco
+  )
+
+ggplot(data= vendite, aes(x=Totale_Vendite, y=reorder(Genre, desc(Pos)), fill=factor(desc(Pos))))+
+  geom_bar(stat="identity", orientation="y", width = 0.6)+
+  geom_text(aes(label = paste0(substring(Percentuale, 1, 4), "%"), x = Totale_Vendite+10, y = -Pos+18 ), vjust = 0) +
+  labs(x="", y="", title="Vendite totali")+
+  scale_fill_discrete( name = "Generi")+
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "none",
+        panel.grid = element_blank(),
+        panel.background = element_blank())
+```
+
+```{r echo=FALSE}
+vendite_P=filter(both, Console=="PlayStation 4") %>%
+  group_by(Genre)%>%
+  summarise(Totale_Vendite = sum(Vendite_Globali))%>%
+  mutate(Percentuale = Totale_Vendite / sum(Totale_Vendite) * 100)
+
+vendite_P=arrange(vendite_P, desc(Percentuale))
+elenco = vector("integer", nrow(vendite_P)) 
+for(x in 1:nrow(vendite_P)){
+  elenco[x]=x
+}
+vendite_P=vendite_P %>%
+  mutate(
+    Pos=elenco
+  )
+ggplot(data = vendite_P, aes(x = Totale_Vendite, y = reorder(Genre, desc(Pos)), fill = Pos)) +
+  geom_bar(stat = "identity", orientation="y") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue")+
+  geom_text(aes(label = paste0(substring(Percentuale, 1, 4), "%"), x = Totale_Vendite+10, y = -Pos+18 ), vjust = 0) +
+  labs(x="", y="", title="Vendite PlayStation 4")+
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "none",
+        panel.grid = element_blank())
+```
+
+```{r echo=FALSE}
+vendite_X=filter(both, Console=="Xbox One") %>%
+  group_by(Genre)%>%
+  summarise(Totale_Vendite = sum(Vendite_Globali))%>%
+  mutate(Percentuale = Totale_Vendite / sum(Totale_Vendite) * 100)
+
+vendite_X=arrange(vendite_X, desc(Percentuale))
+elenco = vector("integer", nrow(vendite_X)) 
+for(x in 1:nrow(vendite_X)){
+  elenco[x]=x
+}
+vendite_X=vendite_X %>%
+  mutate(
+    Pos=elenco
+  )
+ggplot(data = vendite_X, aes(x = Totale_Vendite, y = reorder(Genre, desc(Pos)), fill = Pos)) +
+  geom_bar(stat = "identity", orientation="y") +
+  scale_fill_gradient(low = "lightgreen", high = "darkgreen")+
+  geom_text(aes(label = paste0(substring(Percentuale, 1, 4), "%"), x = Totale_Vendite+10, y = -Pos+17 ), vjust = 0) +
+  labs(x="", y="", title="Vendite Xbox One")+
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "none",
+        panel.grid = element_blank())
+```
+
+## Conclusione
+
+Riassumendo possiamo dire:
+
+-   Risulta più efficiente acquistare giochi per la Playstation 4.
+
+-   È conveniente avere sempre in magazzino i giochi più popolari.
+
+-   Puntare su giochi di azione e sparatutto.
