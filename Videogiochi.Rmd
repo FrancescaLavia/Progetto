@@ -5,7 +5,7 @@ output:
   ioslides_presentation:
     css: stile.css
     incremental: yes
-date: "2023-09-12"
+date: "2024-02-1"
 ---
 
 ```{r setup, include=FALSE}
@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r include=FALSE}
+#librerie usate
 library(ggplot2)
 library(tidyr)
 library(dplyr)
@@ -23,6 +24,7 @@ library(patchwork)
 ```
 
 ```{r include=FALSE}
+#dataset utilizzati
 ps4=read.csv("dataset/PS4_GamesSales.csv")
 xbox=read.csv("dataset/XboxOne_GameSales.csv")
 popolari1=read.csv("dataset/all_games.csv")
@@ -39,7 +41,7 @@ Possiedo un negozio di videogiochi e desidero capire quali videogiochi mi convie
 
 1.  Quali sono i giochi più venduti per le due console?
 
-2.  Quali sono i giochi più popolari e che relazione hanno con i giochi più venduti?
+2.  Che relazione hanno i giochi più popolari con i giochi più venduti?
 
 3.  Quali generi sono i più venduti?
 
@@ -56,6 +58,7 @@ I dataset utilizzati sono i seguenti:
 -   <https://www.kaggle.com/datasets/thedevastator/global-video-game-sales-ratings?select=Raw+Data.csv>
 
 ```{r include=FALSE}
+#cambio nomi console
 varp = vector("character", nrow(ps4)) 
 for(x in 1:nrow(ps4)){
   varp[x]="PlayStation 4"
@@ -72,15 +75,22 @@ xbox=xbox %>%
   mutate(
     Console=varx
   )
+#creazione both, dataset con Gioco, anno, genere, pubblicatore, vendite e console
 both=full_join(ps4, xbox, by=join_by(Game, Year, Genre, Publisher, North.America, Europe, Japan, Rest.of.World, Global, Console))
+#ordinamento both in base alle vendite globali
 both=arrange(both, desc(Global))
+#creazione elenco per ricordare la posizione
 elenco = vector("integer", nrow(both)) 
 for(x in 1:nrow(both)){
   elenco[x]=x
 }
+#in both cambio nomi generi e colonne
+both=both %>%
+  rename(
+    Vendite_Globali=Global
+  )
 both=both %>%
   mutate(
-    Vendite_Globali=Global,
     Pos=elenco,
     Genre = case_when(
     Genre == "Shooter" ~ "Sparatutto",
@@ -96,22 +106,24 @@ both=both %>%
     Genre == "Simulation" ~ "Simulazione",
     Genre == "Strategy" ~ "Strategia",
     TRUE ~ Genre
-  )
-  )
-
+  ))%>%
+  filter(Vendite_Globali!=0.00)
+#popolari1 cambio nome colonne
 popolari1=popolari1%>%
   rename(
     Console=platform,
     Game=name
   )
+#correzione errore nel dataset
 popolari1=popolari1%>%
   mutate(Console = ifelse(summary == ("From out of nowhere, a new enemy attacked. Major metropolitan areas were hit with a never-before-seen form of elemental warfare, plunged into darkness and chaos. In the aftermath, the Agency picked-up a hot lead -- and now they'll stop at nothing to find the ones who knocked us down, to deliver a harsh dose of Justice… by any means necessary."),
                           "PC", Console))
+#correzione spazio in "PlayStation 4"
 popolari1=popolari1%>%
   mutate(Console = ifelse(Console %in% c(" PlayStation 4", " Xbox One"),
                           ifelse(Console == " PlayStation 4", "PlayStation 4", "Xbox One"),
                           Console))
-
+#cambio nomi colonne popolari2
 popolari2=popolari2%>%
   rename(
     Console=Platform,
@@ -119,20 +131,22 @@ popolari2=popolari2%>%
     meta_score=Critic_Score,
     user_review=User_Score
   )
+#correzione voci console
 popolari2=popolari2%>%
   mutate(Console = ifelse(Console %in% c("PS4", " XOne"),
                           ifelse(Console == "PS4", "PlayStation 4", "Xbox One"),
                           Console))
-
+#antijoin per creazioni dataset popolari(unite voci non in comune tra popolari1 e popolari2)
 popolari=anti_join(popolari1 %>% select(Console, Game, meta_score, user_review), popolari2 %>% select(Console, Game, meta_score, user_review), by = join_by(Game, Console, meta_score, user_review))
-
-both=left_join(both, popolari1, by=join_by(Console, Game))
+#left join tra both e popolari
+both=left_join(both, popolari, by=join_by(Console, Game))
 both$user_review=as.numeric(both$user_review)
 ```
 
 ## [Quali sono i giochi più venduti?]{.underline}
 
 ```{r echo=FALSE}
+#barplot che mostra i 10 giochi con più vendite
 ggplot(data= filter(both, Pos <= 10), aes(x=Pos, y=Vendite_Globali, fill=factor(Pos)))+
   geom_bar(stat="identity")+
   labs(x="", y="Vendite globali in milioni")+
@@ -143,6 +157,7 @@ ggplot(data= filter(both, Pos <= 10), aes(x=Pos, y=Vendite_Globali, fill=factor(
 ```
 
 ```{r echo=FALSE}
+#barplot che mostra le console dei 10 giochi con più vendite
 colori_console=c("PlayStation 4" = "#1e90ff", "Xbox One" = "#90ee90")
 
 ggplot(data= filter(both, Pos <= 10), aes(x=Pos, y=Vendite_Globali, fill=factor(Console)))+
@@ -154,20 +169,26 @@ ggplot(data= filter(both, Pos <= 10), aes(x=Pos, y=Vendite_Globali, fill=factor(
         panel.background = element_blank())
 ```
 
-## [Quali sono i giochi più popolari e che relazione hanno con i giochi più venduti?]{.underline}
+## [Che relazione c'è tra i giochi popolari e quelli più venduti?]{.underline}
 
 ```{r include=FALSE}
+#creazione di pop, both senza le posizioni delle vendite con voti della metacritica
 pop=both %>%
+  select(-Pos)%>%
   filter(!is.na(meta_score))
+#ordinamento in base a metascore
 pop=arrange(pop, desc(meta_score))
+#creazione di elenco per le posizioni metascore
 elenco = vector("integer", nrow(pop)) 
 for(x in 1:nrow(pop)){
   elenco[x]=x
 }
 pop=pop %>%
   mutate(
-    PosM=elenco
+    PosM=elenco,
+    Vendite_Globali=Vendite_Globali*1000
   )
+#aggiunta nome console vicino a nome gioco
 for(i in 1:nrow(pop)){
   if(pop$Console[i]=="PlayStation 4"){
     pop$Game[i]=paste(pop$Game[i], "(Ps4)")
@@ -175,7 +196,9 @@ for(i in 1:nrow(pop)){
     pop$Game[i]=paste(pop$Game[i], "(Xbox)")
   }
 }
+#ordinamento in base a user review
 pop=arrange(pop, desc(user_review))
+#creazione elenco per posizioni user review
 for(x in 1:nrow(pop)){
   elenco[x]=x
 }
@@ -184,6 +207,17 @@ pop=pop %>%
     PosU=elenco,
     user_review=user_review*10
   )
+#ordinamento in base alle vendite globali
+pop=arrange(pop, desc(Vendite_Globali))
+#creazione elenco per posizioni vendite globali
+for(x in 1:nrow(pop)){
+  elenco[x]=x
+}
+pop=pop %>%
+  mutate(
+    PosV=elenco
+  )
+#cambio nomi colonne
 pop=pop%>%
   rename(
     Giocatori=user_review,
@@ -192,44 +226,52 @@ pop=pop%>%
 ```
 
 ```{r echo=FALSE}
-color_palette = c("Critica" = "#f4a460", "Giocatori" = "#9370db")
+plot(pop$Giocatori, pop$Critica, xlab = "Valutazione Giocatori", ylab ="Valutazione Critica", main="Confronto tra la valutazione dei giocatori e la valutazione della critica")
 
-pop_long = pivot_longer(filter(pop, PosM <= 10), cols = c(Critica, Giocatori), names_to = "Tipo", values_to = "Punteggio")
+ggplot(data=filter(pop, Critica>50 & Giocatori<50), aes(x= Giocatori, y= Critica, color= Genre)) +
+  geom_point() +
+  labs(color = "Genere")+
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_line(color = "grey"),
+        panel.grid.minor = element_line(color = "grey"),
+        panel.border = element_rect(color = "grey", fill = NA),
+        legend.key = element_rect(fill = "white", color = NA))
+```
 
-p <- ggplot(pop_long, aes(x = Punteggio, y = reorder(Game, desc(PosM)), fill = Tipo)) +
-  geom_bar(stat = "identity", position = "dodge", width = 0.75, color = "black") +
-  scale_fill_manual(values = color_palette, name = "Voti") +
-  coord_cartesian(xlim=c(60, NA)) +
-  labs(title = "Confronto Punteggio critica e videogiocatori",
-       x = "",
-       y = "",
-       fill = "Tipo") +
-  theme_minimal() +
-  theme(legend.position = "top",
-        plot.title = element_text(hjust = 1),
-        panel.grid = element_blank())
+### Analisi relazione valutazione giocatori e vendite
 
-ggplotly(p, tooltip = "Punteggio")
-
+```{r echo=FALSE}
+plot(pop$Giocatori, pop$Vendite_Globali, xlab = "Valutazione Giocatori", ylab ="Vendite Globali in migliaia", main="Confronto giocatori/vendite")
 ```
 
 ```{r echo=FALSE}
-d=ggplot(filter(pop, PosM <= 20), aes(x = reorder(Game, desc(Critica)),y = Critica, group=all())) +
-  geom_point() +
-  geom_line(color = "orange") +
-  labs(title = "Confonto Valutazione e Vendite globali", x = "", y = "Valutazione Critica") +
-  theme(axis.text.x = element_blank(),
-        axis.ticks = element_blank())
-d=ggplotly(d, tooltip = "Critica")
+mod=lm(log(pop$Vendite_Globali)~pop$Giocatori)
+# Ottenere i coefficienti del modello
+coefficienti= coef(mod)
+# Calcolare i parametri del modello esponenziale
+intercetta_esponenziale = exp(coefficienti[1])
+pendenza_esponenziale = coefficienti[2]
+# Visualizzare il modello di regressione esponenziale
+plot(pop$Giocatori, pop$Vendite_Globali, log = "y", xlab = "Valutazione Giocatori", ylab ="Vendite Globali in miliaia", main = "Regressione Esponenziale")
+lines(pop$Giocatori, intercetta_esponenziale * exp(pendenza_esponenziale * pop$Giocatori), col=2)
+```
 
-e=ggplot(filter(pop, PosM <= 20), aes(x = reorder(Game, desc(Critica)),y = Vendite_Globali, group=all())) +
-  geom_point() +
-  geom_line(color = "blue") +
-  labs(title = "Confonto Valutazione e Vendite globali", x = "", y = "Vendite globali in milioni") +
-  theme(axis.text.x = element_blank(),
-        axis.ticks = element_blank())
-e=ggplotly(e, tooltip = "Vendite_Globali")
-subplot(d, e, nrows = 2)
+### Analisi relazione valutazione critica e vendite
+
+```{r echo=FALSE}
+plot(pop$Critica, pop$Vendite_Globali, xlab = "Valutazione Critica", ylab ="Vendite Globali in migliaia", main="Confronto critica/vendite")
+```
+
+```{r echo=FALSE}
+mod=lm(log(pop$Vendite_Globali)~pop$Critica)
+# Ottenere i coefficienti del modello
+coefficienti <- coef(mod)
+# Calcolare i parametri del modello esponenziale
+intercetta_esponenziale = exp(coefficienti[1])
+pendenza_esponenziale = coefficienti[2]
+# Visualizzare il modello di regressione esponenziale
+plot(pop$Critica, pop$Vendite_Globali, log = "y", xlab = "Valutazione Critica", ylab ="Vendite Globali in miliaia", main = "Regressione Esponenziale")
+lines(pop$Critica, intercetta_esponenziale * exp(pendenza_esponenziale * pop$Critica), col=2)
 ```
 
 ## [Quali generi sono i più venduti?]{.underline}
@@ -322,6 +364,18 @@ Riassumendo possiamo dire:
 
 -   Risulta più efficiente acquistare giochi per la Playstation 4.
 
--   È conveniente avere sempre in magazzino i giochi più popolari.
+-   Per valutare quali giochi acquistare conviene basarsi sulle valutazioni della critica.
+
+    ```{r echo=FALSE}
+    ggplot(data = filter(pop, PosM <= 20), aes(x = Critica, y = reorder(Game, desc(PosM)))) +
+      geom_bar(stat = "identity", orientation="y") +
+      scale_fill_gradient(low = "lightgreen", high = "darkgreen")+
+      labs(x="", y="", title="Valutazione Critica")+
+      theme_minimal() +
+      theme(axis.text.x = element_blank(),
+            axis.ticks = element_blank(),
+            legend.position = "none",
+            panel.grid = element_blank())
+    ```
 
 -   Puntare su giochi di azione e sparatutto.
